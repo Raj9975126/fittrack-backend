@@ -16,7 +16,11 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 
 // Security Middleware (Raj - Day 9 Lockdown)
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Allows interactive dashboard scripts on GET /
+  })
+);
 app.use(cors({
   origin: "*", // allow mobile and local dev apps
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
@@ -42,7 +46,7 @@ app.get("/", (_req, res) => {
         .card { background: #0f172a; border-radius: 10px; padding: 16px; margin-top: 16px; border: 1px solid #334155; }
         button { background: #3b82f6; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; margin-right: 8px; margin-top: 8px; transition: 0.2s; }
         button:hover { background: #2563eb; }
-        pre { background: #020617; padding: 12px; border-radius: 8px; color: #38bdf8; overflow-x: auto; font-size: 13px; max-height: 250px; }
+        pre { background: #020617; padding: 12px; border-radius: 8px; color: #38bdf8; overflow-x: auto; font-size: 13px; max-height: 250px; white-space: pre-wrap; }
         .endpoints { list-style: none; padding: 0; }
         .endpoints li { padding: 8px 0; border-bottom: 1px solid #334155; font-family: monospace; }
         .method { font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
@@ -58,10 +62,10 @@ app.get("/", (_req, res) => {
         
         <div class="card">
           <h3>⚡ Quick Live Test from Browser:</h3>
-          <button onclick="testHealth()">1. Test /health</button>
-          <button onclick="testLogin()">2. Test Demo Login</button>
-          <button onclick="testExercises()">3. Fetch Exercises</button>
-          <button onclick="testAnalytics()">4. Fetch Demo Analytics</button>
+          <button id="btnHealth" onclick="testHealth()">1. Test /health</button>
+          <button id="btnLogin" onclick="testLogin()">2. Test Demo Login</button>
+          <button id="btnExercises" onclick="testExercises()">3. Fetch Exercises</button>
+          <button id="btnAnalytics" onclick="testAnalytics()">4. Fetch Demo Analytics</button>
           <pre id="output">Click any button above to test endpoints in real time...</pre>
         </div>
 
@@ -73,8 +77,8 @@ app.get("/", (_req, res) => {
         <div class="card">
           <h3>📡 Core Endpoints:</h3>
           <ul class="endpoints">
-            <li><span class="method get">GET</span> <a href="/health" style="color:#38bdf8;">/health</a> — Service uptime status</li>
-            <li><span class="method get">GET</span> <a href="/exercises" style="color:#38bdf8;">/exercises</a> — 55+ Standard gym catalog</li>
+            <li><span class="method get">GET</span> <a href="/health" target="_blank" style="color:#38bdf8;">/health</a> — Service uptime status</li>
+            <li><span class="method get">GET</span> <a href="/exercises" target="_blank" style="color:#38bdf8;">/exercises</a> — 55+ Standard gym catalog</li>
             <li><span class="method post">POST</span> /auth/login — User authentication</li>
             <li><span class="method get">GET</span> /analytics/summary — Dashboard volume & streak KPIs</li>
             <li><span class="method get">GET</span> /prs — User Personal Records</li>
@@ -84,35 +88,60 @@ app.get("/", (_req, res) => {
 
       <script>
         let authToken = "";
+        const output = document.getElementById('output');
+
         async function testHealth() {
-          const res = await fetch('/health');
-          const data = await res.json();
-          document.getElementById('output').textContent = JSON.stringify(data, null, 2);
-        }
-        async function testLogin() {
-          const res = await fetch('/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: 'demo@fittrack.com', password: 'Password123!' })
-          });
-          const data = await res.json();
-          if (data.data && data.data.token) authToken = data.data.token;
-          document.getElementById('output').textContent = "✅ LOGIN SUCCESSFUL! Token generated:\\n" + JSON.stringify(data, null, 2);
-        }
-        async function testExercises() {
-          const res = await fetch('/exercises');
-          const data = await res.json();
-          document.getElementById('output').textContent = JSON.stringify(data, null, 2);
-        }
-        async function testAnalytics() {
-          if (!authToken) {
-            await testLogin();
+          output.textContent = "⏳ Fetching /health...";
+          try {
+            const res = await fetch('/health');
+            const data = await res.json();
+            output.textContent = JSON.stringify(data, null, 2);
+          } catch (e) {
+            output.textContent = "❌ Error: " + e.message;
           }
-          const res = await fetch('/analytics/summary', {
-            headers: { 'Authorization': 'Bearer ' + authToken }
-          });
-          const data = await res.json();
-          document.getElementById('output').textContent = "📊 REAL-TIME ANALYTICS SUMMARY:\\n" + JSON.stringify(data, null, 2);
+        }
+
+        async function testLogin() {
+          output.textContent = "⏳ Logging in demo user (POST /auth/login)...";
+          try {
+            const res = await fetch('/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: 'demo@fittrack.com', password: 'Password123!' })
+            });
+            const data = await res.json();
+            if (data.data && data.data.token) authToken = data.data.token;
+            output.textContent = "✅ LOGIN SUCCESSFUL! Token generated:\\n" + JSON.stringify(data, null, 2);
+          } catch (e) {
+            output.textContent = "❌ Error: " + e.message;
+          }
+        }
+
+        async function testExercises() {
+          output.textContent = "⏳ Fetching exercises catalog...";
+          try {
+            const res = await fetch('/exercises');
+            const data = await res.json();
+            output.textContent = "✅ EXERCISES CATALOG (" + (data.count || 0) + " found):\\n" + JSON.stringify(data, null, 2);
+          } catch (e) {
+            output.textContent = "❌ Error: " + e.message;
+          }
+        }
+
+        async function testAnalytics() {
+          output.textContent = "⏳ Fetching analytics summary...";
+          try {
+            if (!authToken) {
+              await testLogin();
+            }
+            const res = await fetch('/analytics/summary', {
+              headers: { 'Authorization': 'Bearer ' + authToken }
+            });
+            const data = await res.json();
+            output.textContent = "📊 REAL-TIME ANALYTICS SUMMARY:\\n" + JSON.stringify(data, null, 2);
+          } catch (e) {
+            output.textContent = "❌ Error: " + e.message;
+          }
         }
       </script>
     </body>
