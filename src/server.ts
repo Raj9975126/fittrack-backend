@@ -3,7 +3,9 @@ import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 import exerciseRoutes from "./routes/exerciseRoutes.js";
+import routineRoutes from "./routes/routineRoutes.js";
 import sessionRoutes from "./routes/sessionRoutes.js";
 import prRoutes from "./routes/prRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
@@ -149,21 +151,44 @@ app.get("/", (_req, res) => {
   `);
 });
 
-// Health check endpoint
-app.get("/health", (_req, res) => {
+// Health check endpoints (supports both /health and /api/health)
+const handleHealth = (_req: express.Request, res: express.Response) => {
   res.status(200).json({
     status: "ok",
+    message: "FitTrack API is running",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     service: "FitTrack API",
   });
-});
+};
 
-// Routes
+app.get("/health", handleHealth);
+app.get("/api/health", handleHealth);
+
+// Routes mounted with /api and /api/v1 prefixes for React Native frontend
+app.use("/api/auth", authRoutes);
 app.use("/auth", authRoutes);
+
+app.use("/api/users", userRoutes);
+app.use("/users", userRoutes);
+
+app.use("/api/exercises", exerciseRoutes);
 app.use("/exercises", exerciseRoutes);
+
+app.use("/api/v1/routines", routineRoutes);
+app.use("/api/routines", routineRoutes);
+app.use("/routines", routineRoutes);
+
+app.use("/api/v1/sessions", sessionRoutes);
+app.use("/api/sessions", sessionRoutes);
 app.use("/sessions", sessionRoutes);
+
+app.use("/api/v1/prs", prRoutes);
+app.use("/api/prs", prRoutes);
 app.use("/prs", prRoutes);
+
+app.use("/api/v1/analytics", analyticsRoutes);
+app.use("/api/analytics", analyticsRoutes);
 app.use("/analytics", analyticsRoutes);
 
 // 404 Fallback

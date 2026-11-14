@@ -33,11 +33,11 @@ router.get("/", authenticate, async (req: AuthenticatedRequest, res: Response, n
 });
 
 /**
- * @route   GET /prs/:exerciseId
+ * @route   GET /prs/:exerciseId and /prs/exercise/:exerciseId
  * @desc    Get PR and historical top lifts for a specific exercise
  * @access  Private
  */
-router.get("/:exerciseId", authenticate, async (req: AuthenticatedRequest, res: Response, next) => {
+const handleGetExercisePR = async (req: AuthenticatedRequest, res: Response, next: any) => {
   try {
     const userId = req.user!.id;
     const exerciseId = req.params.exerciseId as string;
@@ -51,7 +51,10 @@ router.get("/:exerciseId", authenticate, async (req: AuthenticatedRequest, res: 
   } catch (err) {
     next(err);
   }
-});
+};
+
+router.get("/:exerciseId", authenticate, handleGetExercisePR);
+router.get("/exercise/:exerciseId", authenticate, handleGetExercisePR);
 
 /**
  * @route   POST /prs/evaluate

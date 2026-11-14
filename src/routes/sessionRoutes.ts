@@ -1,33 +1,44 @@
 import { Router, Response, NextFunction } from "express";
-import { z } from "zod";
 import { prisma } from "../db/prisma.js";
 import { authenticate, AuthenticatedRequest } from "../middleware/auth.js";
-import { validateBody } from "../middleware/validate.js";
 import { evaluateAndRecordPR } from "../services/prService.js";
 
 const router = Router();
 
-const startSessionSchema = z.object({
-  name: z.string().min(1).default("Workout Session"),
-  routineId: z.string().optional(),
-  notes: z.string().optional(),
+router.use(authenticate);
+
+/**
+ * @route   GET /sessions (and /api/sessions)
+ * @desc    Get user sessions list
+ */
+router.get("/", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const sessions = await prisma.workoutSession.findMany({
+      where: { userId },
+      orderBy: { startTime: "desc" },
+      include: {
+        setLogs: {
+          include: { exercise: true },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Sessions fetched successfully",
+      data: sessions,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
-const logSetSchema = z.object({
-  exerciseId: z.string().min(1, "exerciseId is required"),
-  setNumber: z.number().int().positive(),
-  weight: z.number().nonnegative(),
-  reps: z.number().int().positive(),
-  rpe: z.number().min(1).max(10).optional(),
-  isCompleted: z.boolean().default(true),
-  notes: z.string().optional(),
-});
-
-const completeSessionSchema = z.object({
-  notes: z.string().optional(),
-});
-
-router.post("/", authenticate, validateBody(startSessionSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+/**
+ * @route   POST /sessions (and /api/sessions)
+ * @desc    Start a new active workout session
+ */
+router.post("/", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
     const { name, routineId, notes } = req.body;
@@ -35,24 +46,143 @@ router.post("/", authenticate, validateBody(startSessionSchema), async (req: Aut
     const session = await prisma.workoutSession.create({
       data: {
         userId,
-        name,
+        name: name || "Workout Session",
         routineId,
         notes,
         status: "IN_PROGRESS",
       },
+      include: {
+        setLogs: true,
+      },
     });
 
-    res.status(201).json({ success: true, data: session });
+    res.status(201).json({
+      success: true,
+      message: "Session started successfully",
+      data: session,
+    });
   } catch (err) {
     next(err);
   }
 });
 
-router.post("/:id/sets", authenticate, validateBody(logSetSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+/**
+ * @route   GET /sessions/history (and /api/sessions/history)
+ * @desc    Get user workout history
+ */
+router.get("/history", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+
+    const history = await prisma.workoutSession.findMany({
+      where: { userId, status: "COMPLETED" },
+      orderBy: { startTime: "desc" },
+      include: {
+        setLogs: {
+          include: {
+            exercise: {
+              select: { id: true, name: true, muscleGroup: true },
+            },
+          },
+        },
+      },
+    });
+
+    res.json({ success: true, count: history.length, data: history });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @route   GET /sessions/:id
+ * @desc    Get single session details
+ */
+router.get("/:id", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
     const sessionId = req.params.id as string;
-    const { exerciseId, setNumber, weight, reps, rpe, isCompleted, notes } = req.body;
+
+    const session = await prisma.workoutSession.findFirst({
+      where: { id: sessionId, userId },
+      include: {
+        setLogs: {
+          include: { exercise: true },
+          orderBy: { setNumber: "asc" },
+        },
+      },
+    });
+
+    if (!session) {
+      res.status(404).json({ success: false, message: "Session not found" });
+      return;
+    }
+
+    res.json({ success: true, data: session });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @route   PATCH /sessions/:id
+ * @desc    Update session details
+ */
+router.patch("/:id", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const sessionId = req.params.id as string;
+    const { name, notes, status, endTime } = req.body;
+
+    const updated = await prisma.workoutSession.updateMany({
+      where: { id: sessionId, userId },
+      data: {
+        name,
+        notes,
+        status,
+        endTime: endTime ? new Date(endTime) : undefined,
+      },
+    });
+
+    const session = await prisma.workoutSession.findUnique({
+      where: { id: sessionId },
+      include: { setLogs: true },
+    });
+
+    res.json({ success: true, data: session });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @route   GET /sessions/:id/sets
+ * @desc    Get all sets for a session
+ */
+router.get("/:id/sets", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const sessionId = req.params.id as string;
+
+    const sets = await prisma.setLog.findMany({
+      where: { sessionId },
+      include: { exercise: true },
+      orderBy: { setNumber: "asc" },
+    });
+
+    res.json({ success: true, data: sets });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * @route   POST /sessions/:id/sets & PUT /sessions/:id/sets
+ * @desc    Log or batch save sets
+ */
+const handleSaveSets = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const sessionId = req.params.id as string;
 
     const session = await prisma.workoutSession.findFirst({
       where: { id: sessionId, userId },
@@ -63,62 +193,69 @@ router.post("/:id/sets", authenticate, validateBody(logSetSchema), async (req: A
       return;
     }
 
-    let isPR = false;
-    let prDetails = null;
+    // Support both batch sets array or single set body
+    const rawSets = req.body.sets && Array.isArray(req.body.sets) ? req.body.sets : [req.body];
+    const savedSets = [];
 
-    if (isCompleted && weight > 0 && reps > 0) {
-      const prResult = await evaluateAndRecordPR({
-        userId,
-        exerciseId,
-        weight,
-        reps,
-      });
-      isPR = prResult.isPR;
-      prDetails = prResult;
-    }
+    for (const s of rawSets) {
+      const weight = Number(s.weight) || 0;
+      const reps = Number(s.reps) || 0;
+      const isCompleted = s.isCompleted !== undefined ? Boolean(s.isCompleted) : true;
+      let isPR = false;
 
-    const setLog = await prisma.setLog.create({
-      data: {
-        sessionId,
-        exerciseId,
-        setNumber,
-        weight,
-        reps,
-        rpe,
-        isCompleted,
-        isPR,
-        notes,
-      },
-      include: {
-        exercise: true,
-      },
-    });
+      if (isCompleted && weight > 0 && reps > 0 && s.exerciseId) {
+        const prResult = await evaluateAndRecordPR({
+          userId,
+          exerciseId: s.exerciseId,
+          weight,
+          reps,
+        });
+        isPR = prResult.isPR;
+      }
 
-    if (isCompleted) {
-      const setVolume = weight * reps;
-      await prisma.workoutSession.update({
-        where: { id: sessionId },
+      const setLog = await prisma.setLog.create({
         data: {
-          totalVolume: {
-            increment: setVolume,
-          },
+          sessionId,
+          exerciseId: s.exerciseId,
+          setNumber: Number(s.setNumber) || 1,
+          weight,
+          reps,
+          rpe: s.rpe ? Number(s.rpe) : undefined,
+          isCompleted,
+          isPR,
+          notes: s.notes,
         },
+        include: { exercise: true },
       });
+
+      if (isCompleted) {
+        await prisma.workoutSession.update({
+          where: { id: sessionId },
+          data: { totalVolume: { increment: weight * reps } },
+        });
+      }
+
+      savedSets.push(setLog);
     }
 
     res.status(201).json({
       success: true,
-      data: {
-        set: setLog,
-        prEvaluation: prDetails,
-      },
+      message: "Sets saved successfully",
+      data: req.body.sets ? savedSets : savedSets[0],
     });
   } catch (err) {
     next(err);
   }
-});
+};
 
-router.post("/:id/complete", authenticate, validateBody(completeSessionSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post("/:id/sets", handleSaveSets);
+router.put("/:id/sets", handleSaveSets);
+
+/**
+ * @route   POST /sessions/:id/complete
+ * @desc    Complete and close a workout session
+ */
+router.post("/:id/complete", async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
     const sessionId = req.params.id as string;
@@ -126,9 +263,7 @@ router.post("/:id/complete", authenticate, validateBody(completeSessionSchema), 
 
     const session = await prisma.workoutSession.findFirst({
       where: { id: sessionId, userId },
-      include: {
-        setLogs: true,
-      },
+      include: { setLogs: true },
     });
 
     if (!session) {
@@ -149,37 +284,11 @@ router.post("/:id/complete", authenticate, validateBody(completeSessionSchema), 
         notes: notes ?? session.notes,
       },
       include: {
-        setLogs: {
-          include: { exercise: true },
-        },
+        setLogs: { include: { exercise: true } },
       },
     });
 
-    res.json({ success: true, data: updated });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.get("/history", authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  try {
-    const userId = req.user!.id;
-
-    const history = await prisma.workoutSession.findMany({
-      where: { userId, status: "COMPLETED" },
-      orderBy: { startTime: "desc" },
-      include: {
-        setLogs: {
-          include: {
-            exercise: {
-              select: { id: true, name: true, muscleGroup: true },
-            },
-          },
-        },
-      },
-    });
-
-    res.json({ success: true, count: history.length, data: history });
+    res.json({ success: true, message: "Workout session completed", data: updated });
   } catch (err) {
     next(err);
   }
