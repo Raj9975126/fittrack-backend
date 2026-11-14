@@ -145,7 +145,8 @@ npm run test:load
 
 # 7. Start the development server
 npm run dev
-# Server boots on http://localhost:5000
+# Server boots on http://localhost:5001
+# Health check: http://localhost:5001/health
 ```
 
 ---
