@@ -1,0 +1,249 @@
+{
+  "info": {
+    "name": "FitTrack API Collection (For Anshika & Hartej)",
+    "_postman_id": "fittrack-collection-2026",
+    "description": "Complete API collection for FitTrack Backend with Auto-PR engine, Analytics, Auth, Exercise library, and Workout sessions. Maintained by Raj (Infra & Backend Lead).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health & Diagnostics",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Authentication (/auth)",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"testuser@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"name\": \"Test Athlete\",\n  \"weight\": 75,\n  \"height\": 180,\n  \"fitnessGoals\": \"Strength and Hypertrophy\",\n  \"unitSystem\": \"kg\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login User (or Demo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) {",
+                  "    pm.collectionVariables.set('token', json.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo@fittrack.com\",\n  \"password\": \"Password123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Profile / Me",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Exercises (/exercises)",
+      "item": [
+        {
+          "name": "Get Exercise Catalog (with optional muscle filter)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/exercises?muscle=Chest",
+              "host": ["{{baseUrl}}"],
+              "path": ["exercises"],
+              "query": [{ "key": "muscle", "value": "Chest" }]
+            }
+          }
+        },
+        {
+          "name": "Create Custom Exercise",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/exercises", "host": ["{{baseUrl}}"], "path": ["exercises"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pause Safety Bar Squat\",\n  \"muscleGroup\": \"Legs\",\n  \"equipment\": \"Barbell\",\n  \"instructions\": \"2-second pause in the hole before driving up\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Workout Sessions & Set Logging (/sessions)",
+      "item": [
+        {
+          "name": "Start Active Session",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/sessions", "host": ["{{baseUrl}}"], "path": ["sessions"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Chest & Triceps Blast\",\n  \"notes\": \"Targeting heavy bench and high tricep volume\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Log Set (Auto-PR Triggered)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/sessions/REPLACE_WITH_SESSION_ID/sets",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "REPLACE_WITH_SESSION_ID", "sets"]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exerciseId\": \"REPLACE_WITH_EXERCISE_ID\",\n  \"setNumber\": 1,\n  \"weight\": 85,\n  \"reps\": 6,\n  \"rpe\": 8.5,\n  \"isCompleted\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Complete Session",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/sessions/REPLACE_WITH_SESSION_ID/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["sessions", "REPLACE_WITH_SESSION_ID", "complete"]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Felt great, crushed a new PR on Bench!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Workout History",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/sessions/history", "host": ["{{baseUrl}}"], "path": ["sessions", "history"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Personal Records & PR Engine (/prs)",
+      "item": [
+        {
+          "name": "Get All User PRs",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/prs", "host": ["{{baseUrl}}"], "path": ["prs"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get PR & Top Sets for Specific Exercise",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/prs/REPLACE_WITH_EXERCISE_ID",
+              "host": ["{{baseUrl}}"],
+              "path": ["prs", "REPLACE_WITH_EXERCISE_ID"]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Evaluate Potential Set for PR",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/prs/evaluate", "host": ["{{baseUrl}}"], "path": ["prs", "evaluate"] },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exerciseId\": \"REPLACE_WITH_EXERCISE_ID\",\n  \"weight\": 95,\n  \"reps\": 5\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Analytics & Progress Graphs (/analytics)",
+      "item": [
+        {
+          "name": "Get Analytics Summary KPIs",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/analytics/summary", "host": ["{{baseUrl}}"], "path": ["analytics", "summary"] },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get Analytics Charts (Frequency & Strength Time-Series)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/analytics/charts?weeks=8",
+              "host": ["{{baseUrl}}"],
+              "path": ["analytics", "charts"],
+              "query": [{ "key": "weeks", "value": "8" }]
+            },
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    }
+  ]
+}
